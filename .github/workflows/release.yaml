@@ -31,8 +31,15 @@ jobs:
         version: '3.x'
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Install test dependencies
+      run: task deps:test
+      env:
+        VT_API_KEY: ${{ secrets.VT_API_KEY }}
+
     - name: Build release artifacts
       run: task release
+      env:
+        VT_API_KEY: ${{ secrets.VT_API_KEY }}
 
     - name: Bump version and push tag
       uses: anothrNick/github-tag-action@v1

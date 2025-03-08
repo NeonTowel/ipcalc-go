@@ -4,14 +4,26 @@ vars:
   BINARY_NAME: ipcalc
   VERSION: 0.1.0
   DIST_DIR: ./dist
+  # You'll need to set your VirusTotal API key as an environment variable
+  # or replace this with your actual API key (not recommended for public repos)
+  VT_API_KEY: '{{.VT_API_KEY | default ""}}'
 
 tasks:
+  deps:test:
+    desc: Install dependencies
+    cmds:
+      - go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
+      - go install github.com/VirusTotal/vt-cli@latest
+
   build:
+    deps: [fmt]
     desc: Build the ipcalc binary
     cmds:
       - go build -o {{.BINARY_NAME}}{{if eq OS "windows"}}.exe{{end}} ./cmd/ipcalc
 
   test:
+    deps: [gosec, osv-scanner]
     desc: Run tests
     cmds:
       - go test ./...
@@ -24,6 +36,7 @@ tasks:
 
   release:
     desc: Build release binaries for all platforms
+    deps: [security-check]
     cmds:
       - mkdir -p {{.DIST_DIR}}
       # Windows build
@@ -49,6 +62,39 @@ tasks:
       
       # Combined checksums file
       - cd {{.DIST_DIR}} && sha256sum {{.BINARY_NAME}}-windows-amd64.zip {{.BINARY_NAME}}-linux-amd64.tar.gz {{.BINARY_NAME}}-darwin-amd64.tar.gz {{.BINARY_NAME}}-darwin-arm64.tar.gz > checksums.txt
+      
+      # Scan binaries with VirusTotal if API key is available
+      - task: virustotal-scan
+
+  virustotal-scan:
+    desc: Scan binaries with VirusTotal
+    internal: true
+    cmds:
+      - |
+        if [ -n "{{.VT_API_KEY}}" ]; then
+          echo "Scanning binaries with VirusTotal..."
+          
+          # Scan Windows binary
+          vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}.exe --apikey {{.VT_API_KEY}}
+          
+          # Scan Linux binary
+          vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-linux-amd64 --apikey {{.VT_API_KEY}}
+          
+          # Scan macOS binaries
+          vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-amd64 --apikey {{.VT_API_KEY}}
+          vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-arm64 --apikey {{.VT_API_KEY}}
+          
+          echo "VirusTotal scan complete. Check results at https://www.virustotal.com/"
+        else
+          echo "VirusTotal API key not set. Skipping virus scan."
+          echo "To enable scanning, set the VT_API_KEY environment variable."
+        fi
+
+  security-check:
+    desc: Run all security checks
+    deps: [gosec, osv-scanner]
+    cmds:
+      - echo "All security checks passed!"
 
   install:
     desc: Install ipcalc to the system
@@ -84,9 +130,23 @@ tasks:
         echo "Uninstallation successful."
         {{end}}
 
+  gosec:
+    cmds:
+      - gosec ./...
+    desc: "Run gosec to check for security vulnerabilities."
+
+  osv-scanner:
+    cmds:
+      - osv-scanner scan .
+    desc: "Run osv-scanner to check for vulnerabilities."
+
+  fmt:
+    cmds:
+      - go fmt ./...
+    desc: "Run go fmt to format the entire project."
+
   default:
-    desc: Default task that builds the binary
-    deps: [build]
+    - task --list
 
   all:
     desc: Build, test, and install
