@@ -3,6 +3,7 @@ version: '3'
 vars:
   BINARY_NAME: ipcalc
   VERSION: 0.1.0
+  DIST_DIR: ./dist
 
 tasks:
   build:
@@ -19,6 +20,35 @@ tasks:
     desc: Clean build artifacts
     cmds:
       - '{{if eq OS "windows"}}del {{.BINARY_NAME}}.exe{{else}}rm -f {{.BINARY_NAME}}{{end}}'
+      - rm -rf {{.DIST_DIR}}
+
+  release:
+    desc: Build release binaries for all platforms
+    cmds:
+      - mkdir -p {{.DIST_DIR}}
+      # Windows build
+      - GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o {{.DIST_DIR}}/{{.BINARY_NAME}}.exe ./cmd/ipcalc
+      - cd {{.DIST_DIR}} && zip {{.BINARY_NAME}}-windows-amd64.zip {{.BINARY_NAME}}.exe
+      
+      # Linux build
+      - GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o {{.DIST_DIR}}/{{.BINARY_NAME}}-linux-amd64 ./cmd/ipcalc
+      - cd {{.DIST_DIR}} && tar -czvf {{.BINARY_NAME}}-linux-amd64.tar.gz {{.BINARY_NAME}}-linux-amd64
+      
+      # macOS builds
+      - GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-amd64 ./cmd/ipcalc
+      - cd {{.DIST_DIR}} && tar -czvf {{.BINARY_NAME}}-darwin-amd64.tar.gz {{.BINARY_NAME}}-darwin-amd64
+      
+      - GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-arm64 ./cmd/ipcalc
+      - cd {{.DIST_DIR}} && tar -czvf {{.BINARY_NAME}}-darwin-arm64.tar.gz {{.BINARY_NAME}}-darwin-arm64
+      
+      # Generate checksums
+      - cd {{.DIST_DIR}} && sha256sum {{.BINARY_NAME}}-windows-amd64.zip > {{.BINARY_NAME}}-windows-amd64.zip.sha256
+      - cd {{.DIST_DIR}} && sha256sum {{.BINARY_NAME}}-linux-amd64.tar.gz > {{.BINARY_NAME}}-linux-amd64.tar.gz.sha256
+      - cd {{.DIST_DIR}} && sha256sum {{.BINARY_NAME}}-darwin-amd64.tar.gz > {{.BINARY_NAME}}-darwin-amd64.tar.gz.sha256
+      - cd {{.DIST_DIR}} && sha256sum {{.BINARY_NAME}}-darwin-arm64.tar.gz > {{.BINARY_NAME}}-darwin-arm64.tar.gz.sha256
+      
+      # Combined checksums file
+      - cd {{.DIST_DIR}} && sha256sum {{.BINARY_NAME}}-windows-amd64.zip {{.BINARY_NAME}}-linux-amd64.tar.gz {{.BINARY_NAME}}-darwin-amd64.tar.gz {{.BINARY_NAME}}-darwin-arm64.tar.gz > checksums.txt
 
   install:
     desc: Install ipcalc to the system
