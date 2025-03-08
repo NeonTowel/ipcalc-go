@@ -37,17 +37,28 @@ jobs:
         mkdir -p $HOME/bin
         curl -L -o $HOME/bin/vt.tar.gz https://github.com/VirusTotal/vt-cli/releases/download/v${VT_CLI_VERSION}/vt-linux-amd64.tar.gz
         cd $HOME/bin && tar -xzf vt.tar.gz && rm vt.tar.gz
+        # Move the vt binary to the correct location
+        find $HOME/bin -name "vt" -type f -exec mv {} $HOME/bin/ \;
+        chmod +x $HOME/bin/vt
+        # Add to PATH for this and subsequent steps
         echo "$HOME/bin" >> $GITHUB_PATH
+        export PATH="$HOME/bin:$PATH"
+        # Verify installation
+        ls -la $HOME/bin
+        which vt
+        $HOME/bin/vt --version
 
     - name: Install test dependencies
       run: task deps:test
       env:
         VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        PATH: ${{ env.PATH }}:${{ env.HOME }}/bin
 
     - name: Build release artifacts
       run: task release
       env:
         VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        PATH: ${{ env.PATH }}:${{ env.HOME }}/bin
 
     - name: Bump version and push tag
       uses: anothrNick/github-tag-action@v1

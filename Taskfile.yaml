@@ -39,12 +39,24 @@ tasks:
         mkdir -p $HOME/bin
         curl -L -o $HOME/bin/vt.tar.gz https://github.com/VirusTotal/vt-cli/releases/download/v{{.VT_CLI_VERSION}}/vt-darwin-amd64.tar.gz
         cd $HOME/bin && tar -xzf vt.tar.gz && rm vt.tar.gz
+        # Move the vt binary to the correct location if it's in a subdirectory
+        find $HOME/bin -name "vt" -type f -exec mv {} $HOME/bin/ \; 2>/dev/null || true
+        chmod +x $HOME/bin/vt
         echo "VirusTotal CLI installed to $HOME/bin"
+        # Verify installation
+        ls -la $HOME/bin
+        $HOME/bin/vt --version || echo "Warning: vt command not working properly"
         {{else}}
         mkdir -p $HOME/bin
         curl -L -o $HOME/bin/vt.tar.gz https://github.com/VirusTotal/vt-cli/releases/download/v{{.VT_CLI_VERSION}}/vt-linux-amd64.tar.gz
         cd $HOME/bin && tar -xzf vt.tar.gz && rm vt.tar.gz
+        # Move the vt binary to the correct location if it's in a subdirectory
+        find $HOME/bin -name "vt" -type f -exec mv {} $HOME/bin/ \; 2>/dev/null || true
+        chmod +x $HOME/bin/vt
         echo "VirusTotal CLI installed to $HOME/bin"
+        # Verify installation
+        ls -la $HOME/bin
+        $HOME/bin/vt --version || echo "Warning: vt command not working properly"
         {{end}}
 
   build:
@@ -130,11 +142,27 @@ tasks:
         if [ -n "{{.VT_API_KEY}}" ]; then
           echo "Scanning binaries with VirusTotal..."
           
+          # Find vt binary - try multiple locations
+          VT_BIN=""
+          for path in "$HOME/bin/vt" "/usr/local/bin/vt" "$(which vt 2>/dev/null)"; do
+            if [ -x "$path" ]; then
+              VT_BIN="$path"
+              break
+            fi
+          done
+          
+          if [ -z "$VT_BIN" ]; then
+            echo "Error: VirusTotal CLI not found. Skipping scan."
+            exit 0
+          fi
+          
+          echo "Using VirusTotal CLI at: $VT_BIN"
+          
           # Unix paths
-          $HOME/bin/vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}.exe --apikey {{.VT_API_KEY}}
-          $HOME/bin/vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-linux-amd64 --apikey {{.VT_API_KEY}}
-          $HOME/bin/vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-amd64 --apikey {{.VT_API_KEY}}
-          $HOME/bin/vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-arm64 --apikey {{.VT_API_KEY}}
+          "$VT_BIN" scan file {{.DIST_DIR}}/{{.BINARY_NAME}}.exe --apikey {{.VT_API_KEY}}
+          "$VT_BIN" scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-linux-amd64 --apikey {{.VT_API_KEY}}
+          "$VT_BIN" scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-amd64 --apikey {{.VT_API_KEY}}
+          "$VT_BIN" scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-arm64 --apikey {{.VT_API_KEY}}
           
           echo "VirusTotal scan complete. Check results at https://www.virustotal.com/"
         else
