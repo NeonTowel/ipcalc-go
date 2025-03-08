@@ -55,24 +55,38 @@ func ParseIPv6Prefix(prefixStr string) (int, error) {
 	return prefix, nil
 }
 
-// IPv6ToNetworkID calculates the network ID from an IPv6 address and prefix length
-func IPv6ToNetworkID(ip *big.Int, prefixLen int) *big.Int {
+// IPv6ToNetworkID calculates the network ID for an IPv6 address with a given prefix length
+func IPv6ToNetworkID(ip *big.Int, prefixLen int) (*big.Int, error) {
 	// Create a mask with prefixLen 1's followed by (128-prefixLen) 0's
 	mask := new(big.Int)
 	mask.Lsh(big.NewInt(1), 128)    // mask = 2^128
 	mask.Sub(mask, big.NewInt(1))   // mask = 2^128 - 1 (all 1's)
 	
 	// Shift left to remove the host bits
+	if prefixLen < 0 {
+		return nil, fmt.Errorf("prefix length cannot be negative: %d", prefixLen)
+	}
+	if prefixLen > 128 {
+		return nil, fmt.Errorf("prefix length cannot exceed 128: %d", prefixLen)
+	}
+	
 	if prefixLen < 128 {
-		mask.Rsh(mask, 128-uint(prefixLen))
-		mask.Lsh(mask, 128-uint(prefixLen))
+		shiftBits := 128 - prefixLen // Calculate shift bits as int first
+		// Ensure shiftBits is positive before converting to uint
+		if shiftBits < 0 {
+			return nil, fmt.Errorf("invalid shift bits calculation: %d", shiftBits)
+		}
+		// Now it's safe to convert to uint
+		uShiftBits := uint(shiftBits)
+		mask.Rsh(mask, uShiftBits)
+		mask.Lsh(mask, uShiftBits)
 	}
 	
 	// Apply the mask to the IP
 	result := new(big.Int)
 	result.And(ip, mask)
 	
-	return result
+	return result, nil
 }
 
 // IPv6ToString converts a big.Int to an IPv6 address string
@@ -107,9 +121,23 @@ func CalculateIPv6Network(ipStr, prefixStr string) (*IPv6Network, error) {
 	networkMask.Sub(networkMask, big.NewInt(1))   // mask = 2^128 - 1 (all 1's)
 	
 	// Shift left to remove the host bits
+	if prefix < 0 {
+		return nil, fmt.Errorf("prefix length cannot be negative: %d", prefix)
+	}
+	if prefix > 128 {
+		return nil, fmt.Errorf("prefix length cannot exceed 128: %d", prefix)
+	}
+	
 	if prefix < 128 {
-		networkMask.Rsh(networkMask, 128-uint(prefix))
-		networkMask.Lsh(networkMask, 128-uint(prefix))
+		shiftBits := 128 - prefix // Calculate shift bits as int first
+		// Ensure shiftBits is positive before converting to uint
+		if shiftBits < 0 {
+			return nil, fmt.Errorf("invalid shift bits calculation: %d", shiftBits)
+		}
+		// Now it's safe to convert to uint
+		uShiftBits := uint(shiftBits)
+		networkMask.Rsh(networkMask, uShiftBits)
+		networkMask.Lsh(networkMask, uShiftBits)
 	}
 	
 	// Calculate network ID

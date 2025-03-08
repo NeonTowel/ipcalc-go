@@ -264,6 +264,10 @@ func SplitNetwork(networkStr, maskStr string, sizes []int) ([]string, error) {
 	}
 	
 	// Calculate total hosts in the network
+	// Ensure network.BitCount is within safe range before conversion
+	if network.BitCount < 0 || network.BitCount > 32 {
+		return nil, fmt.Errorf("invalid bit count: %d, must be between 0 and 32", network.BitCount)
+	}
 	totalHosts := uint32(1) << (32 - uint32(network.BitCount))
 	
 	// Convert sizes to host counts and check if they fit
@@ -273,8 +277,24 @@ func SplitNetwork(networkStr, maskStr string, sizes []int) ([]string, error) {
 	for _, size := range sizes {
 		// Calculate required hosts for this subnet (including network and broadcast)
 		var hostsNeeded uint32 = 4 // Start with at least 4 hosts (network, broadcast, and 2 usable)
-		for hostsNeeded-2 < uint32(size) {
-			hostsNeeded *= 2
+		
+		// Ensure size is valid before the comparison
+		safeSize := size
+		if safeSize < 0 {
+			return nil, fmt.Errorf("subnet size cannot be negative: %d", safeSize)
+		}
+		
+		// Use a completely safe comparison approach without unsafe conversions
+		if safeSize > 0 {
+			// Convert hostsNeeded to int for safe comparison with safeSize
+			// This is safe because hostsNeeded starts small (4)
+			for int(hostsNeeded)-2 < safeSize {
+				// Check for potential overflow before multiplying
+				if hostsNeeded > (1<<31) {
+					return nil, fmt.Errorf("required hosts calculation would overflow: %d", hostsNeeded)
+				}
+				hostsNeeded *= 2
+			}
 		}
 		
 		hostCounts = append(hostCounts, hostsNeeded)
