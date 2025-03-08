@@ -1,0 +1,63 @@
+version: '3'
+
+vars:
+  BINARY_NAME: ipcalc
+  VERSION: 0.1.0
+
+tasks:
+  build:
+    desc: Build the ipcalc binary
+    cmds:
+      - go build -o {{.BINARY_NAME}}{{if eq OS "windows"}}.exe{{end}} ./cmd/ipcalc
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test ./...
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - '{{if eq OS "windows"}}del {{.BINARY_NAME}}.exe{{else}}rm -f {{.BINARY_NAME}}{{end}}'
+
+  install:
+    desc: Install ipcalc to the system
+    deps: [build]
+    cmds:
+      - |
+        {{if eq OS "windows"}}
+        powershell -Command "$binDir = \"$env:USERPROFILE\bin\"; if (-not (Test-Path $binDir)) { New-Item -ItemType Directory -Path $binDir | Out-Null }; Copy-Item -Path \"{{.BINARY_NAME}}.exe\" -Destination \"$binDir\" -Force; $userPath = [Environment]::GetEnvironmentVariable(\"PATH\", \"User\"); if (-not $userPath.Contains($binDir)) { [Environment]::SetEnvironmentVariable(\"PATH\", \"$userPath;$binDir\", \"User\"); $env:PATH = \"$env:PATH;$binDir\" }"
+        echo "Installation successful. You can now run 'ipcalc' from anywhere."
+        echo "Note: You may need to restart your terminal for the PATH changes to take effect."
+        {{else if eq OS "darwin"}}
+        mkdir -p /usr/local/bin
+        cp {{.BINARY_NAME}} /usr/local/bin/
+        echo "Installation successful. You can now run 'ipcalc' from anywhere."
+        {{else}}
+        sudo mkdir -p /usr/local/bin
+        sudo cp {{.BINARY_NAME}} /usr/local/bin/
+        echo "Installation successful. You can now run 'ipcalc' from anywhere."
+        {{end}}
+
+  uninstall:
+    desc: Uninstall ipcalc from the system
+    cmds:
+      - |
+        {{if eq OS "windows"}}
+        powershell -Command "Remove-Item \"$env:USERPROFILE\bin\{{.BINARY_NAME}}.exe\" -Force -ErrorAction SilentlyContinue"
+        echo "Uninstallation successful."
+        {{else if eq OS "darwin"}}
+        rm -f /usr/local/bin/{{.BINARY_NAME}}
+        echo "Uninstallation successful."
+        {{else}}
+        sudo rm -f /usr/local/bin/{{.BINARY_NAME}}
+        echo "Uninstallation successful."
+        {{end}}
+
+  default:
+    desc: Default task that builds the binary
+    deps: [build]
+
+  all:
+    desc: Build, test, and install
+    deps: [clean, test, install] 
