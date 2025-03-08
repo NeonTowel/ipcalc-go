@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.go'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out the repository
+      uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
+
+    - name: Cross-compile for multiple platforms
+      run: |
+        # Windows
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ipcalc.exe
+        
+        # Linux
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ipcalc-linux-amd64
+        
+        # macOS
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ipcalc-darwin-amd64
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ipcalc-darwin-arm64
+
+    - name: Compress binaries
+      run: |
+        # Windows (zip)
+        zip ipcalc-windows-amd64.zip ipcalc.exe
+        
+        # Linux (tar.gz)
+        tar -czvf ipcalc-linux-amd64.tar.gz ipcalc-linux-amd64
+        
+        # macOS (tar.gz)
+        tar -czvf ipcalc-darwin-amd64.tar.gz ipcalc-darwin-amd64
+        tar -czvf ipcalc-darwin-arm64.tar.gz ipcalc-darwin-arm64
+
+    - name: Generate checksums
+      run: |
+        # Individual checksums with .sha256 extension
+        sha256sum ipcalc-windows-amd64.zip > ipcalc-windows-amd64.zip.sha256
+        sha256sum ipcalc-linux-amd64.tar.gz > ipcalc-linux-amd64.tar.gz.sha256
+        sha256sum ipcalc-darwin-amd64.tar.gz > ipcalc-darwin-amd64.tar.gz.sha256
+        sha256sum ipcalc-darwin-arm64.tar.gz > ipcalc-darwin-arm64.tar.gz.sha256
+        
+        # Combined checksums file
+        sha256sum ipcalc-windows-amd64.zip ipcalc-linux-amd64.tar.gz ipcalc-darwin-amd64.tar.gz ipcalc-darwin-arm64.tar.gz > checksums.txt
+
+    - name: Bump version and push tag
+      uses: anothrNick/github-tag-action@v1
+      id: bump_version
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        WITH_V: false
+        DEFAULT_BUMP: patch
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.bump_version.outputs.new_tag }}
+        name: Release v${{ steps.bump_version.outputs.new_tag }}
+        draft: false
+        prerelease: false
+        files: |
+          ipcalc-windows-amd64.zip
+          ipcalc-windows-amd64.zip.sha256
+          ipcalc-linux-amd64.tar.gz
+          ipcalc-linux-amd64.tar.gz.sha256
+          ipcalc-darwin-amd64.tar.gz
+          ipcalc-darwin-amd64.tar.gz.sha256
+          ipcalc-darwin-arm64.tar.gz
+          ipcalc-darwin-arm64.tar.gz.sha256
+          checksums.txt
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
