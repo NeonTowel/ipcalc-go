@@ -39,7 +39,7 @@ jobs:
         
         # Download the binary directly from GitHub releases
         echo "Downloading VirusTotal CLI v${VT_CLI_VERSION}..."
-        curl -OL https://github.com/VirusTotal/vt-cli/releases/download/v${VT_CLI_VERSION}/Linux64.zip
+        curl -OL https://github.com/VirusTotal/vt-cli/releases/download/${VT_CLI_VERSION}/Linux64.zip
         unzip Linux64.zip -d $HOME/bin
         
         # Make it executable
