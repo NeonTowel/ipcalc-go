@@ -7,6 +7,7 @@ vars:
   # You'll need to set your VirusTotal API key as an environment variable
   # or replace this with your actual API key (not recommended for public repos)
   VT_API_KEY: '{{.VT_API_KEY | default ""}}'
+  VT_CLI_VERSION: '1.0.1'
 
 tasks:
   deps:test:
@@ -14,7 +15,37 @@ tasks:
     cmds:
       - go install github.com/securego/gosec/v2/cmd/gosec@latest
       - go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
-      - go install github.com/VirusTotal/vt-cli@latest
+      # Install VirusTotal CLI by downloading the pre-compiled binary
+      - task: install-vt-cli
+
+  install-vt-cli:
+    desc: Install VirusTotal CLI
+    internal: true
+    cmds:
+      - |
+        echo "Installing VirusTotal CLI v{{.VT_CLI_VERSION}}..."
+        {{if eq OS "windows"}}
+        # Try to install using winget first
+        powershell -Command "if (Get-Command winget -ErrorAction SilentlyContinue) { winget install VirusTotal.vt-cli -e } else { Write-Host 'winget not found, trying chocolatey...' }"
+        
+        # If winget fails, try chocolatey
+        powershell -Command "if (-not (Get-Command vt -ErrorAction SilentlyContinue) -and (Get-Command choco -ErrorAction SilentlyContinue)) { choco install vt-cli -y }"
+        
+        # If both fail, download manually
+        powershell -Command "if (-not (Get-Command vt -ErrorAction SilentlyContinue)) { Write-Host 'Manual download required. Please download from https://github.com/VirusTotal/vt-cli/releases/download/v{{.VT_CLI_VERSION}}/vt-windows-386.zip and extract to a directory in your PATH' }"
+        
+        echo "VirusTotal CLI installation attempted. Please ensure 'vt' is in your PATH."
+        {{else if eq OS "darwin"}}
+        mkdir -p $HOME/bin
+        curl -L -o $HOME/bin/vt.tar.gz https://github.com/VirusTotal/vt-cli/releases/download/v{{.VT_CLI_VERSION}}/vt-darwin-amd64.tar.gz
+        cd $HOME/bin && tar -xzf vt.tar.gz && rm vt.tar.gz
+        echo "VirusTotal CLI installed to $HOME/bin"
+        {{else}}
+        mkdir -p $HOME/bin
+        curl -L -o $HOME/bin/vt.tar.gz https://github.com/VirusTotal/vt-cli/releases/download/v{{.VT_CLI_VERSION}}/vt-linux-amd64.tar.gz
+        cd $HOME/bin && tar -xzf vt.tar.gz && rm vt.tar.gz
+        echo "VirusTotal CLI installed to $HOME/bin"
+        {{end}}
 
   build:
     deps: [fmt]
@@ -71,24 +102,46 @@ tasks:
     internal: true
     cmds:
       - |
+        {{if eq OS "windows"}}
+        powershell -Command "
+          if (-not [string]::IsNullOrEmpty('{{.VT_API_KEY}}')) {
+            Write-Host 'Scanning binaries with VirusTotal...'
+            
+            # Check if vt is installed
+            if (-not (Get-Command vt -ErrorAction SilentlyContinue)) { 
+              Write-Host 'VirusTotal CLI not found in PATH. Skipping scan.' -ForegroundColor Yellow
+              exit 0 
+            }
+            
+            # Windows paths with PowerShell
+            vt scan file '{{.DIST_DIR}}/{{.BINARY_NAME}}.exe' --apikey '{{.VT_API_KEY}}'
+            vt scan file '{{.DIST_DIR}}/{{.BINARY_NAME}}-linux-amd64' --apikey '{{.VT_API_KEY}}'
+            vt scan file '{{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-amd64' --apikey '{{.VT_API_KEY}}'
+            vt scan file '{{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-arm64' --apikey '{{.VT_API_KEY}}'
+            
+            Write-Host 'VirusTotal scan complete. Check results at https://www.virustotal.com/'
+          } else {
+            Write-Host 'VirusTotal API key not set. Skipping virus scan.'
+            Write-Host 'To enable scanning, set the VT_API_KEY environment variable.'
+          }
+        "
+        {{else}}
+        # Unix version
         if [ -n "{{.VT_API_KEY}}" ]; then
           echo "Scanning binaries with VirusTotal..."
           
-          # Scan Windows binary
-          vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}.exe --apikey {{.VT_API_KEY}}
-          
-          # Scan Linux binary
-          vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-linux-amd64 --apikey {{.VT_API_KEY}}
-          
-          # Scan macOS binaries
-          vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-amd64 --apikey {{.VT_API_KEY}}
-          vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-arm64 --apikey {{.VT_API_KEY}}
+          # Unix paths
+          $HOME/bin/vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}.exe --apikey {{.VT_API_KEY}}
+          $HOME/bin/vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-linux-amd64 --apikey {{.VT_API_KEY}}
+          $HOME/bin/vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-amd64 --apikey {{.VT_API_KEY}}
+          $HOME/bin/vt scan file {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-arm64 --apikey {{.VT_API_KEY}}
           
           echo "VirusTotal scan complete. Check results at https://www.virustotal.com/"
         else
           echo "VirusTotal API key not set. Skipping virus scan."
           echo "To enable scanning, set the VT_API_KEY environment variable."
         fi
+        {{end}}
 
   security-check:
     desc: Run all security checks
@@ -150,4 +203,9 @@ tasks:
 
   all:
     desc: Build, test, and install
-    deps: [clean, test, install] 
+    deps: [clean, test, install]
+
+  test-vt:
+    desc: Test VirusTotal scanning
+    cmds:
+      - task: virustotal-scan 

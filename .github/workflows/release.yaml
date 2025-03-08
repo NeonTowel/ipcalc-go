@@ -31,6 +31,14 @@ jobs:
         version: '3.x'
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Install VirusTotal CLI
+      run: |
+        VT_CLI_VERSION="1.0.1"
+        mkdir -p $HOME/bin
+        curl -L -o $HOME/bin/vt.tar.gz https://github.com/VirusTotal/vt-cli/releases/download/v${VT_CLI_VERSION}/vt-linux-amd64.tar.gz
+        cd $HOME/bin && tar -xzf vt.tar.gz && rm vt.tar.gz
+        echo "$HOME/bin" >> $GITHUB_PATH
+
     - name: Install test dependencies
       run: task deps:test
       env:
