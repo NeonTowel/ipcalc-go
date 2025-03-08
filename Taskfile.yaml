@@ -47,11 +47,11 @@ tasks:
         ls -la $HOME/bin
         $HOME/bin/vt --version || echo "Warning: vt command not working properly"
         {{else}}
+        # Linux installation
         mkdir -p $HOME/bin
-        curl -L -o $HOME/bin/vt.tar.gz https://github.com/VirusTotal/vt-cli/releases/download/v{{.VT_CLI_VERSION}}/vt-linux-amd64.tar.gz
-        cd $HOME/bin && tar -xzf vt.tar.gz && rm vt.tar.gz
-        # Move the vt binary to the correct location if it's in a subdirectory
-        find $HOME/bin -name "vt" -type f -exec mv {} $HOME/bin/ \; 2>/dev/null || true
+        echo "Downloading VirusTotal CLI v{{.VT_CLI_VERSION}}..."
+        # Download the binary directly from GitHub releases
+        curl -L -o $HOME/bin/vt https://github.com/VirusTotal/vt-cli/releases/download/1.0.0/Linux64
         chmod +x $HOME/bin/vt
         echo "VirusTotal CLI installed to $HOME/bin"
         # Verify installation
